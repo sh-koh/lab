@@ -1,0 +1,9 @@
+default:
+  @just --list
+
+build:
+  gcc -o client ./c_src/main.c
+  gcc -o server ./s_src/main.c
+
+clean:
+  @rm -f client server

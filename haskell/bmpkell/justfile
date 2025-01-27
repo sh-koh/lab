@@ -1,0 +1,15 @@
+set shell := ["sh", "-c"]
+set unstable := true
+
+BUILD_DIR := "builddir"
+ENTRY_POINT := "src/Main.hs"
+EXE := "hetch"
+
+default:
+  @just --list
+
+build:
+  ghc --make -outputdir {{BUILD_DIR}} -O -o {{BUILD_DIR}}/{{EXE}} src/*.hs
+
+run: build
+  ./{{BUILD_DIR}}/{{EXE}}

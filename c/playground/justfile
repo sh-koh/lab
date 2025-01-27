@@ -1,0 +1,14 @@
+set shell := ["nu", "-c"]
+set unstable := true
+builddir := "./builddir"
+
+default:
+  @just --list
+
+build:
+  meson compile -C {{builddir}}/
+
+run:
+  {{builddir}}/reverse-string
+
+brun: build run

@@ -1,0 +1,133 @@
+#!/bin/bash
+
+DIR="/srv/notre-minecraft"
+MC_VERSION="1.21.1"
+EXE="paper_$MC_VERSION.jar"
+START_CMD="java -Xms12288M -Xmx12288M -XX:+AlwaysPreTouch -XX:+DisableExplicitGC -XX:+ParallelRefProcEnabled -XX:+PerfDisableSharedMem -XX:+UnlockExperimentalVMOptions -XX:+UseG1GC -XX:G1HeapRegionSize=8M -XX:G1HeapWastePercent=5 -XX:G1MaxNewSizePercent=40 -XX:G1MixedGCCountTarget=4 -XX:G1MixedGCLiveThresholdPercent=90 -XX:G1NewSizePercent=30 -XX:G1RSetUpdatingPauseTimePercent=5 -XX:G1ReservePercent=20 -XX:InitiatingHeapOccupancyPercent=15 -XX:MaxGCPauseMillis=200 -XX:MaxTenuringThreshold=1 -XX:SurvivorRatio=32 -Dusing.aikars.flags=https://mcflags.emc.gs -Daikars.new.flags=true -jar $DIR/$EXE --nogui"
+
+TMUX_SOCKET="notre-minecraft"
+TMUX_SESSION="notre-minecraft"
+
+send_cmd()
+{
+  cmd="$1"
+  tmux -L $TMUX_SOCKET send-keys -t $TMUX_SESSION.0 "$cmd" Enter
+  return $?
+}
+
+is_server_running()
+{
+  tmux -L $TMUX_SOCKET has-session -t $TMUX_SESSION > /dev/null 2>&1
+  return $?
+}
+
+start_server()
+{
+  if is_server_running; then
+    echo "Le serveur est déjà lancé"
+    return 1
+  fi
+  echo "Lancement du serveur dans une session tmux dédiée en cours..."
+  tmux -L $TMUX_SOCKET new-session -c $DIR -s $TMUX_SESSION -d "$START_CMD"
+
+  return $?
+}
+
+stop_server()
+{
+  if ! is_server_running; then
+    echo "Le serveur n'est pas lancé"
+    return 1
+  fi
+
+  echo "Signalement de l'arrêt du serveur aux joueurs..."
+  send_cmd "title @a times 3 14 3"
+  send_cmd "tellraw @a {\"text\":\"Le serveur va redémarrer dans 1 minute.\",\"color\":\"dark_red\"}"
+  sleep 50
+  for i in {10..1}; do
+    send_cmd "title @a subtitle {\"text\":\"$i secondes\",\"color\":\"gray\"}"
+    send_cmd "title @a title {\"text\":\"Arrêt dans\",\"color\":\"dark_red\"}"
+    sleep 1
+  done
+
+  echo "Éjection de tout les joueurs connectés"
+  send_cmd "kickall"
+
+  echo "Arrêt du serveur..."
+  send_cmd "stop"
+  if [ $? -ne 0 ]; then
+    echo "Impossible d'envoyer un signal d'arrêt au serveur"
+    return 1
+  fi
+
+  wait=0
+  while is_server_running; do
+    sleep 1
+    wait=$((wait+1))
+    if [ $wait -gt 60 ]; then
+      echo "Impossible d'arrêter le serveur, délai dépassé"
+      return 1
+    fi
+  done
+  
+  return $?
+}
+
+restart_server()
+{
+  echo "Redémarrage du serveur en cours..."
+  stop_server
+  sleep 1
+  start_server
+  return $?
+}
+
+reload_server()
+{
+  echo "Rechargement du serveur"
+  send_cmd "reload"
+  return $?
+}
+
+attach_session()
+{
+  if ! is_server_running; then
+    echo "Impossible de s'attacher à la session tmux, le serveur minecraft n'est pas lancé"
+    return 1
+  fi
+
+  tmux -L $TMUX_SOCKET attach-session -t $TMUX_SESSION
+  return 0
+}
+
+case $1 in
+  start)
+    start_server
+    exit $?
+    ;;
+  stop)
+    stop_server
+    exit $?
+    ;;
+  restart)
+    restart_server
+    exit $?
+    ;;
+  reload)
+    reload_server
+    exit $?
+    ;;
+  cmd)
+    send_cmd "$2"
+    exit $?
+    ;;
+  attach)
+    attach_session
+    exit $?
+    ;;
+  *)
+    echo "Erreur: l'argument "$1" n'est pas une option valide "
+    echo "Usage: $0 {start|stop|restart|reload|cmd|attach}"
+    exit 2
+    ;;
+esac
