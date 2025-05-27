@@ -4,7 +4,7 @@
   src,
   rustPlatform,
 }:
-rustPlatform.buildRustPackage (final: {
+rustPlatform.buildRustPackage (_final: {
   inherit name version src;
   nativeBuildInputs = [ ];
   buildInputs = [ ];
